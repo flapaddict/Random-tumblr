@@ -15,9 +15,13 @@
   #zoomer{will-change:transform;transform-origin:50% 50%}
   #zoomer.anim{transition:transform .25s ease}
   #img{max-width:100vw;max-height:100dvh;object-fit:contain;transition:transform .2s ease,opacity .2s ease}
-  #bar{position:fixed;left:0;right:0;bottom:0;padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(transparent,#000c);display:flex;gap:10px;align-items:center;transition:opacity .3s}
+  #bar{position:fixed;left:0;right:0;bottom:0;padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(transparent,#000c);display:flex;flex-direction:column;gap:8px;align-items:stretch;transition:opacity .3s}
   #bar.hide{opacity:0;pointer-events:none}
-  #caption{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #btns{display:flex;justify-content:space-between;gap:6px}
+  #btns .btn{flex:1;max-width:76px}
+  .btn svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:middle}
+  #fav.on svg{fill:#ff5a7a;stroke:#ff5a7a}
+  #caption{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #caption a{color:#8cf;text-decoration:none}
   .btn{background:#ffffff22;color:#fff;border:0;border-radius:24px;min-width:48px;height:48px;font-size:20px;cursor:pointer}
   #status{position:fixed;top:calc(8px + env(safe-area-inset-top));left:12px;right:12px;font-size:12px;color:#fa8;pointer-events:none}
@@ -28,6 +32,17 @@
   #panel .row button{flex:1;height:48px;border-radius:8px;border:0;font-size:16px;color:#fff;background:#356}
   #panel .row button.sec{background:#333}
   #hint{font-size:12px;color:#888;margin-top:10px}
+  #favs{position:fixed;inset:0;background:#000;z-index:20;display:none;flex-direction:column;touch-action:pan-y}
+  #favhead{display:flex;gap:8px;align-items:center;padding:calc(10px + env(safe-area-inset-top)) 12px 10px;background:#111;flex-wrap:wrap}
+  #favhead .sp{flex:1}
+  .tb{background:#333;color:#fff;border:0;border-radius:8px;height:40px;padding:0 12px;font-size:14px}
+  .tb.pri{background:#356}
+  #favgrid{flex:1;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:3px;padding:3px;align-content:start}
+  .cell{position:relative;aspect-ratio:1;background:#222;overflow:hidden}
+  .cell img{width:100%;height:100%;object-fit:cover;display:block}
+  .cell .x{position:absolute;top:4px;right:4px;width:32px;height:32px;border-radius:16px;background:#000a;color:#fff;border:0;font-size:15px}
+  #toast{position:fixed;left:50%;bottom:calc(130px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#000d;color:#fff;padding:8px 14px;border-radius:20px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:30;max-width:90vw;text-align:center}
+  #toast.on{opacity:1}
 </style>
 </head>
 <body>
@@ -35,9 +50,14 @@
 <div id="status"></div>
 <div id="bar">
   <div id="caption"></div>
-  <button class="btn" id="fs" aria-label="Full screen">⛶</button>
-  <button class="btn" id="play" aria-label="Play or pause">⏸</button>
-  <button class="btn" id="gear" aria-label="Settings">⚙</button>
+  <div id="btns">
+    <button class="btn" id="fav" aria-label="Favorite"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21.2l7.8-7.7 1-1.1a5.5 5.5 0 0 0 0-7.8z"/></svg></button>
+    <button class="btn" id="dl" aria-label="Download image"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+    <button class="btn" id="favlist" aria-label="Favorites list"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button>
+    <button class="btn" id="fs" aria-label="Full screen">⛶</button>
+    <button class="btn" id="play" aria-label="Play or pause">⏸</button>
+    <button class="btn" id="gear" aria-label="Settings">⚙</button>
+  </div>
 </div>
 
 <div id="panel">
@@ -48,8 +68,20 @@
   <label for="secs">Auto-advance seconds (0 = manual only)</label>
   <input id="secs" type="number" inputmode="numeric" min="0" value="8">
   <div class="row"><button class="sec" id="cancel">Close</button><button id="save">Save &amp; start</button></div>
-  <div id="hint">Swipe left/right for next/previous. Pinch to zoom, drag to pan when zoomed, double-tap to zoom in/out. Tap the photo to show/hide controls. Swipe up opens the original post.</div>
+  <div id="hint">Swipe left/right for next/previous. Heart saves a favorite, the arrow downloads the image, the grid opens your favorites. Pinch to zoom, drag to pan when zoomed, double-tap to zoom in/out. Tap the photo to show/hide controls. Swipe up opens the original post.</div>
 </div>
+
+<div id="favs">
+  <div id="favhead">
+    <button class="tb" id="favclose">Close</button>
+    <span id="favcount"></span>
+    <span class="sp"></span>
+    <button class="tb pri" id="favshuffle">Shuffle play</button>
+    <button class="tb" id="favrandom">Back to random</button>
+  </div>
+  <div id="favgrid"></div>
+</div>
+<div id="toast"></div>
 
 <script>
 const API = "https://api.tumblr.com/v2/blog/";
@@ -58,6 +90,14 @@ const cfg = JSON.parse(localStorage.getItem("trp") || "{}");
 let timer = null, paused = false, wake = null;
 const totals = {}, queue = [], seen = new Set(), history = [];
 let pos = -1, loading = false;
+let mode = "random", list = [], fi = 0, curItem = null;   // mode: random | favs
+const loadFavs = () => { try { return JSON.parse(localStorage.getItem("trp_favs") || "[]"); } catch { return []; } };
+let favs = loadFavs();
+let toastT;
+function toast(m) { const t = $("toast"); t.textContent = m; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 2400); }
+const saveFavs = () => { try { localStorage.setItem("trp_favs", JSON.stringify(favs)); } catch { toast("Couldn't save (storage full?)"); } };
+const isFav = k => favs.some(f => f.key === k);
+function updateHeart() { $("fav").classList.toggle("on", !!curItem && isFav(curItem.key)); }
 
 $("key").value = cfg.key || "";
 $("blogs").value = (cfg.blogs || []).join("\n");
@@ -98,7 +138,7 @@ async function refill() {
     for (const p of r.posts) for (const ph of (p.photos || [])) {
       // use a ~1280px size to save mobile data; fall back to original
       const alt = (ph.alt_sizes || []).find(a => a.width <= 1280) || ph.original_size;
-      if (!seen.has(ph.original_size.url)) items.push({ key: ph.original_size.url, url: alt.url, post: p.post_url, blog: p.blog_name, summary: p.summary || "" });
+      if (!seen.has(ph.original_size.url)) items.push({ key: ph.original_size.url, url: alt.url, thumb: ((ph.alt_sizes || []).find(a => a.width <= 400) || alt).url, post: p.post_url, blog: p.blog_name, summary: p.summary || "" });
     }
     items.sort(() => Math.random() - 0.5);
     queue.push(...items);
@@ -109,15 +149,17 @@ async function refill() {
 
 function show(it, dir = 0) {
   resetZoom(false);
+  curItem = it; updateHeart();
   const img = $("img");
   img.style.opacity = 0; img.style.transform = `translateX(${dir * 40}px)`;
   setTimeout(() => {
     img.src = it.url;
     img.onload = () => { img.style.transform = "none"; img.style.opacity = 1; };
-    $("caption").innerHTML = `<a href="${it.post}" target="_blank" rel="noopener">${it.blog}</a> ${it.summary.slice(0, 100).replace(/</g, "&lt;")}`;
+    $("caption").innerHTML = (mode === "favs" ? `♥ ${fi + 1}/${list.length} · ` : "") + `<a href="${it.post}" target="_blank" rel="noopener">${it.blog}</a> ${it.summary.slice(0, 100).replace(/</g, "&lt;")}`;
   }, 120);
 }
 async function next() {
+  if (mode === "favs") { if (!list.length) return; fi = (fi + 1) % list.length; return show(list[fi], -1); }
   if (pos < history.length - 1) { pos++; return show(history[pos], -1); }
   if (queue.length < 4) await refill();
   const it = queue.shift();
@@ -127,14 +169,17 @@ async function next() {
   if (queue.length < 8) refill();
   if (queue[0]) new Image().src = queue[0].url;
 }
-function prev() { if (pos > 0) { pos--; show(history[pos], 1); } }
+function prev() {
+  if (mode === "favs") { if (!list.length) return; fi = (fi - 1 + list.length) % list.length; return show(list[fi], 1); }
+  if (pos > 0) { pos--; show(history[pos], 1); }
+}
 function schedule() { clearInterval(timer); if (cfg.secs > 0 && !paused) timer = setInterval(() => { if (!zoomed()) next(); }, cfg.secs * 1000); }
 async function keepAwake() { try { wake = await navigator.wakeLock?.request("screen"); } catch {} }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") keepAwake(); });
 
 function start() {
   if (!cfg.key || !cfg.blogs?.length) return openPanel();
-  queue.length = 0; history.length = 0; pos = -1;
+  mode = "random"; queue.length = 0; history.length = 0; pos = -1;
   next(); schedule(); keepAwake();
 }
 function openPanel() { $("panel").style.display = "block"; clearInterval(timer); }
@@ -239,6 +284,76 @@ stage.addEventListener("wheel", e => {
   zoomAt(ns, e.clientX, e.clientY, false);
 }, { passive: false });
 $("fs").onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
+
+// ---- favorites + download ----
+$("fav").onclick = () => {
+  if (!curItem) return;
+  if (isFav(curItem.key)) { favs = favs.filter(f => f.key !== curItem.key); toast("Removed from favorites"); }
+  else {
+    const { key, url, thumb, post, blog, summary } = curItem;
+    favs.unshift({ key, url, thumb: thumb || url, post, blog, summary: (summary || "").slice(0, 200), t: Date.now() });
+    toast("Added to favorites ♥");
+  }
+  saveFavs(); updateHeart(); navigator.vibrate?.(15);
+};
+function renderFavs() {
+  const g = $("favgrid"); g.innerHTML = "";
+  $("favcount").textContent = `${favs.length} favorite${favs.length === 1 ? "" : "s"}`;
+  $("favshuffle").style.display = favs.length ? "" : "none";
+  $("favrandom").style.display = mode === "favs" ? "" : "none";
+  if (!favs.length) {
+    g.style.display = "block";
+    g.innerHTML = '<p style="padding:24px;color:#888;text-align:center">No favorites yet. Tap the heart on a photo to save it here.</p>';
+    return;
+  }
+  g.style.display = "grid";
+  favs.forEach((f, i) => {
+    const c = document.createElement("div"); c.className = "cell";
+    const im = document.createElement("img"); im.loading = "lazy"; im.alt = ""; im.src = f.thumb || f.url; c.appendChild(im);
+    const x = document.createElement("button"); x.className = "x"; x.textContent = "✕"; x.setAttribute("aria-label", "Remove favorite");
+    x.onclick = ev => { ev.stopPropagation(); favs.splice(i, 1); saveFavs(); renderFavs(); updateHeart(); };
+    c.appendChild(x);
+    c.onclick = () => playFavs(i, false);
+    g.appendChild(c);
+  });
+}
+function openFavs() { clearInterval(timer); renderFavs(); $("favs").style.display = "flex"; }
+function closeFavs() { $("favs").style.display = "none"; schedule(); }
+function playFavs(i, shuffle) {
+  if (!favs.length) return;
+  list = favs.slice(); if (shuffle) list.sort(() => Math.random() - 0.5);
+  mode = "favs"; fi = shuffle ? 0 : i;
+  $("favs").style.display = "none";
+  show(list[fi], -1); schedule();
+}
+function backToRandom() {
+  mode = "random"; $("favs").style.display = "none";
+  if (history[pos]) show(history[pos], 0); else start();
+  schedule();
+}
+$("favlist").onclick = openFavs; $("favclose").onclick = closeFavs;
+$("favshuffle").onclick = () => playFavs(0, true); $("favrandom").onclick = backToRandom;
+
+async function download() {
+  const it = curItem; if (!it) return;
+  let base = (it.key.split("/").pop() || "").split("?")[0] || ("photo-" + Date.now());
+  if (!/\.\w{2,4}$/.test(base)) base += ".jpg";
+  const name = (it.blog || "tumblr").replace(/[^\w.-]/g, "_") + "_" + base;
+  toast("Downloading…");
+  try {
+    const r = await fetch(it.key, { mode: "cors" });
+    if (!r.ok) throw new Error(r.status);
+    const u = URL.createObjectURL(await r.blob());
+    const a = document.createElement("a"); a.href = u; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(u), 15000);
+    toast("Download started");
+  } catch {
+    window.open(it.key, "_blank");
+    toast("Opened the full image: press and hold it to save");
+  }
+}
+$("dl").onclick = download;
 addEventListener("keydown", e => {
   if (e.target.matches("input,textarea")) return;
   if (e.key === "ArrowRight" || e.key === " ") { next(); schedule(); }
