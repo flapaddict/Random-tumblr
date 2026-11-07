@@ -43,11 +43,39 @@
   .cell .x{position:absolute;top:4px;right:4px;width:32px;height:32px;border-radius:16px;background:#000a;color:#fff;border:0;font-size:15px}
   #toast{position:fixed;left:50%;bottom:calc(130px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#000d;color:#fff;padding:8px 14px;border-radius:20px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:30;max-width:90vw;text-align:center}
   #toast.on{opacity:1}
+
+  /* ---- desktop (mouse + keyboard) ---- */
+  .nav{display:none}
+  @media (hover:hover) and (pointer:fine){
+    .btn{transition:background .15s}
+    .btn:hover{background:#ffffff44}
+    #bar{align-items:center;padding:16px 24px 20px}
+    #caption{max-width:min(900px,90vw);text-align:center;font-size:14px}
+    #btns{justify-content:center;gap:12px;width:auto}
+    #btns .btn{flex:none;width:52px;max-width:none}
+    #stage.zoomed{cursor:grab}
+    #stage.zoomed.dragging{cursor:grabbing}
+    .nav{display:flex;position:fixed;top:0;bottom:110px;width:14vw;max-width:170px;align-items:center;border:0;background:none;color:#fff;font-size:64px;line-height:1;opacity:0;cursor:pointer;transition:opacity .2s;z-index:5;padding:0 18px}
+    #navprev{left:0;justify-content:flex-start}
+    #navnext{right:0;justify-content:flex-end}
+    .nav{text-shadow:0 0 6px #000,0 0 14px #000}
+    .nav:hover{opacity:1}
+    body.zoomed .nav{display:none}
+    body.idle #bar,body.idle .nav{opacity:0;pointer-events:none}
+    body.idle #stage{cursor:none}
+    #panel{left:50%;right:auto;top:50%;bottom:auto;transform:translate(-50%,-50%);width:min(520px,92vw);border-radius:16px;max-height:86vh;box-shadow:0 12px 48px #000}
+    #favgrid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px;padding:6px}
+    .cell{cursor:pointer}
+    .tb{cursor:pointer}
+    .tb:hover{background:#4a4a4a}.tb.pri:hover{background:#468}
+  }
 </style>
 </head>
 <body>
 <div id="stage"><div id="zoomer"><img id="img" alt="" draggable="false"></div></div>
 <div id="status"></div>
+<button class="nav" id="navprev" aria-label="Previous photo">‹</button>
+<button class="nav" id="navnext" aria-label="Next photo">›</button>
 <div id="bar">
   <div id="caption"></div>
   <div id="btns">
@@ -90,6 +118,7 @@ const cfg = JSON.parse(localStorage.getItem("trp") || "{}");
 let timer = null, paused = false, wake = null;
 const totals = {}, queue = [], seen = new Set(), history = [];
 let pos = -1, loading = false;
+const fine = matchMedia("(hover:hover) and (pointer:fine)");   // mouse-and-keyboard device
 let mode = "random", list = [], fi = 0, curItem = null;   // mode: random | favs
 const loadFavs = () => { try { return JSON.parse(localStorage.getItem("trp_favs") || "[]"); } catch { return []; } };
 let favs = loadFavs();
@@ -138,7 +167,7 @@ async function refill() {
     for (const p of r.posts) for (const ph of (p.photos || [])) {
       // use a ~1280px size to save mobile data; fall back to original
       const alt = (ph.alt_sizes || []).find(a => a.width <= 1280) || ph.original_size;
-      if (!seen.has(ph.original_size.url)) items.push({ key: ph.original_size.url, url: alt.url, thumb: ((ph.alt_sizes || []).find(a => a.width <= 400) || alt).url, post: p.post_url, blog: p.blog_name, summary: p.summary || "" });
+      if (!seen.has(ph.original_size.url)) items.push({ key: ph.original_size.url, url: fine.matches ? ph.original_size.url : alt.url, thumb: ((ph.alt_sizes || []).find(a => a.width <= 400) || alt).url, post: p.post_url, blog: p.blog_name, summary: p.summary || "" });
     }
     items.sort(() => Math.random() - 0.5);
     queue.push(...items);
@@ -201,7 +230,10 @@ const MAX_Z = 6;
 let Z = { s: 1, tx: 0, ty: 0 };
 const zoomer = $("zoomer"), stage = $("stage");
 const zoomed = () => Z.s > 1.02;
-function applyZoom() { zoomer.style.transform = `translate(${Z.tx}px,${Z.ty}px) scale(${Z.s})`; }
+function applyZoom() {
+  zoomer.style.transform = `translate(${Z.tx}px,${Z.ty}px) scale(${Z.s})`;
+  const z = zoomed(); stage.classList.toggle("zoomed", z); document.body.classList.toggle("zoomed", z);
+}
 function clampPan(s = Z.s) {
   const img = $("img"), vw = innerWidth, vh = innerHeight;
   const mx = Math.max(0, (img.offsetWidth * s - vw) / 2), my = Math.max(0, (img.offsetHeight * s - vh) / 2);
@@ -277,10 +309,10 @@ stage.addEventListener("touchend", e => {
 }, { passive: true });
 stage.addEventListener("touchcancel", () => { g = null; }, { passive: true });
 
-// desktop: wheel to zoom
+// desktop: wheel / trackpad-pinch to zoom
 stage.addEventListener("wheel", e => {
   e.preventDefault();
-  const ns = Math.min(MAX_Z, Math.max(1, Z.s * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
+  const ns = Math.min(MAX_Z, Math.max(1, Z.s * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015))));
   zoomAt(ns, e.clientX, e.clientY, false);
 }, { passive: false });
 $("fs").onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
@@ -354,12 +386,78 @@ async function download() {
   }
 }
 $("dl").onclick = download;
-addEventListener("keydown", e => {
-  if (e.target.matches("input,textarea")) return;
-  if (e.key === "ArrowRight" || e.key === " ") { next(); schedule(); }
-  if (e.key === "ArrowLeft") { prev(); schedule(); }
-  if (e.key === "0" || e.key === "Escape") resetZoom(true);
+// ---- desktop: mouse drag, double-click, keyboard, idle-hide ----
+let lastPT = "touch", md = null;
+stage.addEventListener("pointerdown", e => {
+  lastPT = e.pointerType;
+  if (e.pointerType !== "mouse" || e.button !== 0 || !zoomed()) return;
+  md = { x: e.clientX, y: e.clientY, tx: Z.tx, ty: Z.ty };
+  zoomer.classList.remove("anim");
+  stage.setPointerCapture(e.pointerId); stage.classList.add("dragging");
 });
+stage.addEventListener("pointermove", e => {
+  if (!md) return;
+  Z.tx = md.tx + (e.clientX - md.x); Z.ty = md.ty + (e.clientY - md.y);
+  clampPan(); applyZoom();
+});
+const endDrag = () => { md = null; stage.classList.remove("dragging"); };
+stage.addEventListener("pointerup", endDrag); stage.addEventListener("pointercancel", endDrag);
+stage.addEventListener("dblclick", e => {
+  if (lastPT !== "mouse") return;
+  zoomed() ? resetZoom(true) : zoomAt(2.5, e.clientX, e.clientY, true);
+});
+$("navprev").onclick = () => { prev(); schedule(); };
+$("navnext").onclick = () => { next(); schedule(); };
+addEventListener("resize", () => { clampPan(); applyZoom(); });
+// buttons shouldn't keep keyboard focus (Space would re-press them)
+document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("button"); if (b) b.blur(); });
+
+const tips = { fav: "Favorite (H)", dl: "Download (D)", favlist: "Favorites (G)", fs: "Full screen (F)", play: "Play / pause (P)", gear: "Settings (S)" };
+for (const k in tips) $(k).title = tips[k];
+if (fine.matches) $("hint").innerHTML = "<b>Mouse:</b> wheel to zoom, drag to pan when zoomed, double-click to zoom in/out, side arrows for previous/next. <b>Keys:</b> \u2190 \u2192 / Space = previous/next \u00b7 H = favorite \u00b7 D = download \u00b7 G = favorites \u00b7 P = pause \u00b7 F = full screen \u00b7 S = settings \u00b7 + \u2212 0 = zoom \u00b7 Esc = close / reset zoom.";
+
+const modalOpen = () => $("panel").style.display === "block" || $("favs").style.display === "flex";
+function zoomBy(f) { zoomAt(Math.min(MAX_Z, Math.max(1, Z.s * f)), innerWidth / 2, innerHeight / 2, true); }
+function panBy(dx, dy) { zoomer.classList.add("anim"); Z.tx += dx; Z.ty += dy; clampPan(); applyZoom(); }
+addEventListener("keydown", e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;           // leave browser shortcuts (Ctrl+D etc.) alone
+  const k = e.key;
+  if (k === "Escape") {
+    if ($("favs").style.display === "flex") closeFavs();
+    else if ($("panel").style.display === "block") closePanel();
+    else resetZoom(true);
+    return;
+  }
+  if (e.target.matches("input,textarea") || modalOpen()) return;
+  if (e.target.closest && e.target.closest("button") && (k === " " || k === "Enter")) return;
+  const K = k.toLowerCase();
+  if (k === "ArrowRight" || k === "ArrowLeft") {
+    e.preventDefault();
+    if (zoomed()) panBy(k === "ArrowRight" ? -120 : 120, 0);
+    else { k === "ArrowRight" ? next() : prev(); schedule(); }
+  } else if (k === "ArrowUp" || k === "ArrowDown") {
+    if (zoomed()) { e.preventDefault(); panBy(0, k === "ArrowUp" ? 120 : -120); }
+  } else if (k === " ") { e.preventDefault(); next(); schedule(); }
+  else if (k === "0") resetZoom(true);
+  else if (k === "+" || k === "=") zoomBy(1.4);
+  else if (k === "-" || k === "_") zoomBy(1 / 1.4);
+  else if (K === "h" || K === "l") $("fav").click();
+  else if (K === "d") $("dl").click();
+  else if (K === "g") $("favlist").click();
+  else if (K === "s") $("gear").click();
+  else if (K === "p") $("play").click();
+  else if (K === "f") $("fs").click();
+});
+
+let idleT;
+function wakeUI() {
+  document.body.classList.remove("idle"); clearTimeout(idleT);
+  if (!fine.matches) return;
+  idleT = setTimeout(() => { if (!modalOpen() && !$("bar").matches(":hover")) document.body.classList.add("idle"); }, 3000);
+}
+addEventListener("pointermove", e => { if (e.pointerType === "mouse") wakeUI(); });
+addEventListener("keydown", wakeUI);
+wakeUI();
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 start();
